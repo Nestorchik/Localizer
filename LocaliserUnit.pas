@@ -127,7 +127,7 @@ end;
 
 procedure TLocalizerForm.ProceedButtonClick(Sender: TObject);
 var
-  i, a : integer;
+  i, a: integer;
   str: string;
   langINI: TIniFile;
 begin
