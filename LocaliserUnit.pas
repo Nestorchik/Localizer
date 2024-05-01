@@ -3,29 +3,36 @@ unit LocaliserUnit;
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics, IniFiles,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ComCtrls, Vcl.ExtCtrls, System.DateUtils;
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, System.JSON, Vcl.Dialogs, Vcl.Buttons, Vcl.ComCtrls, Vcl.StdCtrls, Vcl.Controls,
+  Vcl.Graphics, IniFiles,  Vcl.Forms, Vcl.ExtCtrls, System.DateUtils;
 
 type
   TLocalizerForm = class(TForm)
     FilesList: TMemo;
     En_stringsList: TMemo;
     Ru_stringsList: TMemo;
-    ProceedButton: TButton;
     nFilesLabel: TLabel;
     nEn_stringsLabel: TLabel;
     nRu_stringsLabel: TLabel;
     RootPathProject: TEdit;
-    russian: TCheckBox;
+    langLabel: TCheckBox;
     CheckFilesButton: TButton;
     CheckFileLabel: TLabel;
     CheckMemo: TMemo;
     StatusBar: TStatusBar;
+    ComfyRootButton: TBitBtn;
+    ProceedButton: TBitBtn;
+    CurrentIniButton: TBitBtn;
+    CurrentIniFile: TEdit;
+    OpenIniDialog: TOpenDialog;
     procedure ProceedButtonClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure TranslateFile(sFile: string; en_list, ru_list: TStrings);
     procedure CheckFilesButtonClick(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure ComfyRootButtonClick(Sender: TObject);
+    procedure CurrentIniButtonClick(Sender: TObject);
+    procedure CurrentIniFileChange(Sender: TObject);
   private
     { Private declarations }
   public
@@ -34,7 +41,7 @@ type
 
 var
   LocalizerForm: TLocalizerForm;
-  workFolder, dataFolder: string;
+  workFolder: string;
   langIniName: string;
 
 implementation
@@ -67,6 +74,43 @@ begin
   end;
 end;
 
+procedure TLocalizerForm.ComfyRootButtonClick(Sender: TObject);
+var
+  OpenDialog: TFileOpenDialog;
+  SelectedFolder: string;
+begin
+  OpenDialog := TFileOpenDialog.Create(LocalizerForm);
+  try
+    OpenDialog.Options := OpenDialog.Options + [fdoPickFolders];
+    if not OpenDialog.Execute then
+      Abort;
+    SelectedFolder := OpenDialog.FileName;
+    // here check code to real folder ConfyUI or another///
+    RootPathProject.Text := (SelectedFolder);
+  finally
+    OpenDialog.Free;
+  end;
+end;
+
+procedure TLocalizerForm.CurrentIniButtonClick(Sender: TObject);
+var
+  SelectedFile: string;
+begin
+  try
+    if not OpenIniDialog.Execute then
+      Abort;
+    SelectedFile := OpenIniDialog.FileName;
+    // here check code thet it is real ini-file
+    CurrentIniFile.Text := (SelectedFile);
+  finally
+  end;
+end;
+
+procedure TLocalizerForm.CurrentIniFileChange(Sender: TObject);
+begin
+  langIniName:= CurrentIniFile.Text;
+end;
+
 procedure TLocalizerForm.FormCreate(Sender: TObject);
 var
   ini: TIniFile;
@@ -78,14 +122,17 @@ begin
     Height := ini.ReadInteger('WinSize', 'Height', 680);
     Left := ini.ReadInteger('WinPosition', 'X', 100);
     Top := ini.ReadInteger('WinPosition', 'Y', 100);
-    RootPathProject.Text := Utf8ToAnsi(ini.ReadString('ProjectPaths', 'WorkPath', ''));
-    ProceedButton.Caption := Utf8ToAnsi(ini.ReadString('Langs', 'ProceedButtonCaption', 'Start'));
+    RootPathProject.Text := ini.ReadString('ProjectPaths', 'WorkPath', 'Нет данных...');
+    CurrentIniFile.Text := ini.ReadString('ProjectPaths', 'CurrentIni', 'Нет данных...');
+    ProceedButton.Caption := ini.ReadString('Langs', 'ProceedButtonCaption', 'Начать перевод');
+    ComfyRootButton.Caption :=ini.ReadString('Langs', 'ComfyRootButton', 'Корень проекта');
+    CurrentIniButton.Caption :=ini.ReadString('Langs', 'CurrentIniButton', 'Файл перевода');
+    OpenIniDialog.Title:=ini.ReadString('Langs', 'OpenIniDialogTitle', 'Открыть файл перевода');
+    langLabel.Caption:=ini.ReadString('Langs', 'langLabelCaption', 'русский');
   end;
   ini.Free;
-
-  workFolder := 'c:\6';
-  dataFolder := 'c:\6';
-  langIniName := 'ru.ini';
+  workFolder := RootPathProject.Text ;
+  langIniName := CurrentIniFile.Text ;
 end;
 
 procedure TLocalizerForm.FormClose(Sender: TObject; var Action: TCloseAction);
@@ -100,6 +147,12 @@ begin
     ini.WriteInteger('WinPosition', 'X', Left);
     ini.WriteInteger('WinPosition', 'Y', Top);
     ini.WriteString('ProjectPaths', 'WorkPath', RootPathProject.Text);
+    ini.WriteString('ProjectPaths', 'CurrentIni', CurrentIniFile.Text);
+    ini.WriteString('Langs', 'ProceedButtonCaption', ProceedButton.Caption);
+    ini.WriteString('Langs', 'ComfyRootButton', ComfyRootButton.Caption);
+    ini.WriteString('Langs', 'CurrentIniButton', CurrentIniButton.Caption);
+    ini.WriteString('Langs', 'OpenIniDialogTitle', OpenIniDialog.Title);
+    ini.WriteString('Langs', 'OpenIniDialogTitle', langLabel.Caption);
   end;
   ini.Free;
 end;
@@ -131,7 +184,7 @@ var
   str: string;
   langINI: TIniFile;
 begin
-  langINI := TIniFile.Create(dataFolder + '\' + langIniName);
+  langINI := TIniFile.Create(langIniName);
   With langINI do
   begin
     ReadSections(FilesList.Lines);
@@ -144,14 +197,14 @@ begin
         str := Ru_stringsList.Lines[i];
         Delete(str, 1, Pos('=', str));
         Application.ProcessMessages;
-        Ru_stringsList.Lines[i] := str;
+        Ru_stringsList.Lines[i] := utf8ToAnsi(str);
         with TStringList.Create do
         begin
           begin
             LoadFromFile(FilesList.Lines[a]);
             // for i := 0 to (En_stringsList.Lines.Count - 1) do
             begin
-              if russian.Checked then
+              if langLabel.Checked then
                 Text := StringReplace(Text, En_stringsList.Lines[i], Ru_stringsList.Lines[i], [rfReplaceAll])
               else
                 Text := StringReplace(Text, Ru_stringsList.Lines[i], En_stringsList.Lines[i], [rfReplaceAll]);
